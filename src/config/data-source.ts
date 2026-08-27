@@ -1,3 +1,4 @@
+import { RefreshToken } from "../entities/RefreshToken";
 import "reflect-metadata";
 import { DataSource } from "typeorm";
 import { User } from "../entities/User";
@@ -32,7 +33,8 @@ export const AppDataSource = new DataSource({
     InventoryTransfer,
     Review,
     Order,
-    OrderItem
+    OrderItem,
+    RefreshToken
   ],
   subscribers: [],
   migrations: [],

@@ -76,7 +76,7 @@ export class ProductController {
     }
   }
 
-    public static async createProduct(req: AuthenticatedRequest, res: Response) {
+  public static async createProduct(req: AuthenticatedRequest, res: Response) {
     try {
       const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, weightKg, mainImageUrl } = req.body;
       const repo = AppDataSource.getRepository(Product);

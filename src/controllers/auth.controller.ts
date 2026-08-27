@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { AppDataSource } from "../config/data-source";
 import { User } from "../entities/User";
+import { RefreshToken } from "../entities/RefreshToken";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 
 export class AuthController {
@@ -44,24 +45,124 @@ export class AuthController {
   public static async generateDevToken(req: Request, res: Response) {
     try {
       const { email, role, firebaseUid } = req.body;
-      const secret = process.env.JWT_SECRET || "secreto_desarrollo_ecommerce_123";
-      const uid = firebaseUid || (role === "SUPERADMIN" ? "superadmin-uid-100" : role === "VENDEDOR" ? "vendor1-uid-200" : "client1-uid-400");
+      const accessSecret = process.env.JWT_SECRET || "secreto_desarrollo_ecommerce_123";
+      const refreshSecret = process.env.JWT_REFRESH_SECRET || "secreto_refresco_ecommerce_456";
       
-      const payload = {
-        uid,
-        email: email || `${uid}@ecommerce.com`,
-        role: role || "CLIENTE"
-      };
+      const uid = firebaseUid || (role === "SUPERADMIN" ? "superadmin-uid-100" : role === "VENDEDOR" ? "vendor1-uid-200" : "client1-uid-400");
+      const userEmail = email || `${uid}@ecommerce.com`;
+      const userRole = role || "CLIENTE";
 
-      const token = jwt.sign(payload, secret, { expiresIn: "7d" });
+      const userRepo = AppDataSource.getRepository(User);
+      let user = await userRepo.findOne({ where: { firebaseUid: uid } });
+      if (!user) {
+        user = await userRepo.save(userRepo.create({
+          firebaseUid: uid,
+          email: userEmail,
+          name: `Usuario ${userRole}`,
+          role: userRole as any
+        }));
+      }
+
+      const payload = { id: user.id, uid: user.firebaseUid, email: user.email, role: user.role };
+
+      // 1. Generar Access Token (Corta duración: 15 minutos)
+      const accessExpiresIn = process.env.JWT_EXPIRES_IN || "15m";
+      const accessToken = jwt.sign(payload, accessSecret, { expiresIn: accessExpiresIn as any });
+
+      // 2. Generar Refresh Token (Larga duración: 7 días) y guardar en BD
+      const refreshExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
+      const refreshTokenValue = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: refreshExpiresIn as any });
+
+      const refreshRepo = AppDataSource.getRepository(RefreshToken);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      const refreshEntity = refreshRepo.create({
+        userId: user.id,
+        token: refreshTokenValue,
+        expiresAt,
+        isRevoked: false
+      });
+      await refreshRepo.save(refreshEntity);
 
       return res.json({
-        message: "Token JWT generado con éxito para pruebas.",
-        role: payload.role,
-        uid: payload.uid,
-        token,
-        bearerFormat: `Bearer ${token}`
+        message: "Tokens de autenticación (AccessToken + RefreshToken) generados con éxito.",
+        user: { id: user.id, email: user.email, role: user.role },
+        accessToken,
+        accessTokenBearer: `Bearer ${accessToken}`,
+        refreshToken: refreshTokenValue,
+        expiresIn: accessExpiresIn
       });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async refreshAccessToken(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ message: "RefreshToken es requerido en el body." });
+      }
+
+      const refreshSecret = process.env.JWT_REFRESH_SECRET || "secreto_refresco_ecommerce_456";
+      const accessSecret = process.env.JWT_SECRET || "secreto_desarrollo_ecommerce_123";
+
+      // 1. Verificar firma JWT del RefreshToken
+      let decoded: any;
+      try {
+        decoded = jwt.verify(refreshToken, refreshSecret);
+      } catch {
+        return res.status(403).json({ message: "RefreshToken inválido o expirado." });
+      }
+
+      // 2. Verificar persistencia y validez en BD
+      const refreshRepo = AppDataSource.getRepository(RefreshToken);
+      const tokenInDb = await refreshRepo.findOne({ where: { token: refreshToken, isRevoked: false } });
+
+      if (!tokenInDb || tokenInDb.expiresAt < new Date()) {
+        return res.status(403).json({ message: "RefreshToken revocado o expirado en la base de datos." });
+      }
+
+      // 3. Obtener datos del usuario
+      const userRepo = AppDataSource.getRepository(User);
+      const user = await userRepo.findOne({ where: { id: decoded.id } });
+
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado." });
+      }
+
+      // 4. Emitir un NUEVO Access Token
+      const accessExpiresIn = process.env.JWT_EXPIRES_IN || "15m";
+      const newAccessToken = jwt.sign(
+        { id: user.id, uid: user.firebaseUid, email: user.email, role: user.role },
+        accessSecret,
+        { expiresIn: accessExpiresIn as any }
+      );
+
+      return res.json({
+        message: "AccessToken renovado exitosamente.",
+        accessToken: newAccessToken,
+        accessTokenBearer: `Bearer ${newAccessToken}`,
+        expiresIn: accessExpiresIn
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async revokeRefreshToken(req: Request, res: Response) {
+    try {
+      const { refreshToken } = req.body;
+      const refreshRepo = AppDataSource.getRepository(RefreshToken);
+      const tokenInDb = await refreshRepo.findOne({ where: { token: refreshToken } });
+
+      if (tokenInDb) {
+        tokenInDb.isRevoked = true;
+        await refreshRepo.save(tokenInDb);
+      }
+
+      return res.json({ message: "RefreshToken revocado exitosamente (Logout completado)." });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }

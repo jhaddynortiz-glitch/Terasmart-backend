@@ -85,6 +85,44 @@ const options: swaggerJSDoc.Options = {
           responses: { 200: { description: "Token JWT generado con éxito" } }
         }
       },
+            "/auth/refresh": {
+        post: {
+          summary: "Renovar el AccessToken usando un RefreshToken válido sin pedir relogueo",
+          tags: ["Autenticación & Perfil"],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["refreshToken"],
+                  properties: { refreshToken: { type: "string", example: "eyJhbGciOiJIUzI1Ni..." } }
+                }
+              }
+            }
+          },
+          responses: { 200: { description: "Nuevo AccessToken emitido con éxito" }, 403: { description: "RefreshToken expirado o revocado" } }
+        }
+      },
+      "/auth/revoke": {
+        post: {
+          summary: "Revocar un RefreshToken al cerrar sesión (Logout)",
+          tags: ["Autenticación & Perfil"],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["refreshToken"],
+                  properties: { refreshToken: { type: "string", example: "eyJhbGciOiJIUzI1Ni..." } }
+                }
+              }
+            }
+          },
+          responses: { 200: { description: "RefreshToken revocado exitosamente" } }
+        }
+      },
       "/auth/sync": {
         post: {
           summary: "Sincronizar usuario de Firebase Auth con MySQL",

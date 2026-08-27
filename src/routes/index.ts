@@ -11,6 +11,8 @@ const router = Router();
 
 // --- 1. RUTAS DE AUTENTICACIÓN Y PERFIL ---
 router.post("/auth/dev-token", AuthController.generateDevToken as any);
+router.post("/auth/refresh", AuthController.refreshAccessToken as any);
+router.post("/auth/revoke", AuthController.revokeRefreshToken as any);
 router.post("/auth/sync", authenticateJwt, AuthController.syncUser as any);
 router.get("/auth/me", authenticateJwt, AuthController.getProfile as any);
 
