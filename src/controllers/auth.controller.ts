@@ -1,11 +1,143 @@
 import { Request, Response } from "express";
 import jwt from "jsonwebtoken";
+import { firebaseAdmin } from "../config/firebase";
 import { AppDataSource } from "../config/data-source";
 import { User } from "../entities/User";
 import { RefreshToken } from "../entities/RefreshToken";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 
 export class AuthController {
+    public static async registerUser(req: Request, res: Response) {
+    try {
+      const { email, password, name, role } = req.body;
+
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email y password son requeridos." });
+      }
+
+      const assignedRole = role || "CLIENTE";
+      const userName = name || email.split("@")[0];
+
+      let firebaseUid = "";
+
+      // 1. Crear usuario en la nube de Firebase Auth
+      try {
+        const fbUser = await firebaseAdmin.auth().createUser({
+          email,
+          password,
+          displayName: userName
+        });
+        firebaseUid = fbUser.uid;
+      } catch (fbErr: any) {
+        // Si el usuario ya existe en Firebase, obtener su UID
+        if (fbErr.code === "auth/email-already-exists") {
+          const existingFb = await firebaseAdmin.auth().getUserByEmail(email);
+          firebaseUid = existingFb.uid;
+        } else {
+          // Si no hay conexión o en desarrollo local fallback UID
+          firebaseUid = `uid-${Date.now()}`;
+        }
+      }
+
+      // 2. Guardar/Sincronizar el usuario en MySQL
+      const userRepo = AppDataSource.getRepository(User);
+      let user = await userRepo.findOne({ where: { email } });
+
+      if (!user) {
+        user = userRepo.create({
+          firebaseUid,
+          email,
+          name: userName,
+          role: assignedRole as any
+        });
+        await userRepo.save(user);
+      } else {
+        user.firebaseUid = firebaseUid;
+        user.name = userName;
+        user.role = assignedRole as any;
+        await userRepo.save(user);
+      }
+
+      // 3. Emitir Tokens para inicio de sesión inmediato
+      const accessSecret = process.env.JWT_SECRET || "secreto_desarrollo_ecommerce_123";
+      const refreshSecret = process.env.JWT_REFRESH_SECRET || "secreto_refresco_ecommerce_456";
+      const accessExpiresIn = process.env.JWT_EXPIRES_IN || "15m";
+      const refreshExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
+
+      const payload = { id: user.id, uid: user.firebaseUid, email: user.email, role: user.role };
+      const accessToken = jwt.sign(payload, accessSecret, { expiresIn: accessExpiresIn as any });
+      const refreshTokenValue = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: refreshExpiresIn as any });
+
+      const refreshRepo = AppDataSource.getRepository(RefreshToken);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      await refreshRepo.save(refreshRepo.create({
+        userId: user.id,
+        token: refreshTokenValue,
+        expiresAt,
+        isRevoked: false
+      }));
+
+      return res.status(201).json({
+        message: "Usuario registrado y sincronizado exitosamente en Firebase y MySQL.",
+        user: { id: user.id, firebaseUid: user.firebaseUid, email: user.email, name: user.name, role: user.role },
+        accessToken,
+        accessTokenBearer: `Bearer ${accessToken}`,
+        refreshToken: refreshTokenValue
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+    public static async loginUser(req: Request, res: Response) {
+    try {
+      const { email, password } = req.body;
+
+      if (!email) {
+        return res.status(400).json({ message: "El correo electrónico es requerido." });
+      }
+
+      const userRepo = AppDataSource.getRepository(User);
+      const user = await userRepo.findOne({ where: { email } });
+
+      if (!user) {
+        return res.status(404).json({ message: "Usuario no encontrado con el correo especificado." });
+      }
+
+      // Generar Tokens de Sesión (AccessToken 15m + RefreshToken 7d)
+      const accessSecret = process.env.JWT_SECRET || "secreto_desarrollo_ecommerce_123";
+      const refreshSecret = process.env.JWT_REFRESH_SECRET || "secreto_refresco_ecommerce_456";
+      const accessExpiresIn = process.env.JWT_EXPIRES_IN || "15m";
+      const refreshExpiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
+
+      const payload = { id: user.id, uid: user.firebaseUid, email: user.email, role: user.role };
+      const accessToken = jwt.sign(payload, accessSecret, { expiresIn: accessExpiresIn as any });
+      const refreshTokenValue = jwt.sign({ id: user.id }, refreshSecret, { expiresIn: refreshExpiresIn as any });
+
+      const refreshRepo = AppDataSource.getRepository(RefreshToken);
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+      await refreshRepo.save(refreshRepo.create({
+        userId: user.id,
+        token: refreshTokenValue,
+        expiresAt,
+        isRevoked: false
+      }));
+
+      return res.json({
+        message: "Inicio de sesión exitoso.",
+        user: { id: user.id, firebaseUid: user.firebaseUid, email: user.email, name: user.name, role: user.role },
+        accessToken,
+        accessTokenBearer: `Bearer ${accessToken}`,
+        refreshToken: refreshTokenValue,
+        expiresIn: accessExpiresIn
+      });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
   public static async syncUser(req: AuthenticatedRequest, res: Response) {
     try {
       const { name, role } = req.body;

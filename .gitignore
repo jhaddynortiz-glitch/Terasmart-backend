@@ -27,3 +27,11 @@ Thumbs.db
 # OpenSpec & Local Task Tracking
 task.md
 GUIA_DEFENSA.md
+
+# Secret Firebase Admin Key
+serviceAccountKey.json
+src/config/serviceAccountKey.json
+
+# Temporary test scripts
+src/test-firebase.ts
+test-firebase.ts

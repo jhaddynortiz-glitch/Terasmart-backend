@@ -10,6 +10,8 @@ import { authenticateJwt, authorizeRoles } from "../middlewares/auth.middleware"
 const router = Router();
 
 // --- 1. RUTAS DE AUTENTICACIÓN Y PERFIL ---
+router.post("/auth/register", AuthController.registerUser as any);
+router.post("/auth/login", AuthController.loginUser as any);
 router.post("/auth/dev-token", AuthController.generateDevToken as any);
 router.post("/auth/refresh", AuthController.refreshAccessToken as any);
 router.post("/auth/revoke", AuthController.revokeRefreshToken as any);

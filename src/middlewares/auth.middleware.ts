@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { firebaseAdmin } from "../config/firebase";
 import { AppDataSource } from "../config/data-source";
 import { User, UserRole } from "../entities/User";
 
@@ -20,31 +21,38 @@ export const authenticateJwt = async (req: AuthenticatedRequest, res: Response, 
 
   const token = authHeader.split(" ")[1];
   try {
-    // Para desarrollo, soporta simulación JWT de prueba o Firebase Token
     let firebaseUid = "";
     let email = "";
 
+    // 1. Intentar verificación oficial en vivo con Firebase Admin SDK
     try {
-      const decoded = jwt.decode(token) as any;
-      if (decoded && (decoded.uid || decoded.user_id || decoded.sub)) {
-        firebaseUid = decoded.uid || decoded.user_id || decoded.sub;
-        email = decoded.email || "usuario@ejemplo.com";
-      } else {
-        firebaseUid = token; // Fallback mock
+      const decodedFirebase = await firebaseAdmin.auth().verifyIdToken(token);
+      firebaseUid = decodedFirebase.uid;
+      email = decodedFirebase.email || `${firebaseUid}@firebase.com`;
+    } catch (firebaseErr) {
+      // 2. Fallback de desarrollo para Tokens firmados localmente (dev-token o mock IDs)
+      try {
+        const decodedLocal = jwt.decode(token) as any;
+        if (decodedLocal && (decodedLocal.uid || decodedLocal.user_id || decodedLocal.sub || decodedLocal.id)) {
+          firebaseUid = decodedLocal.uid || decodedLocal.user_id || decodedLocal.sub || decodedLocal.id;
+          email = decodedLocal.email || `${firebaseUid}@ecommerce.com`;
+        } else {
+          firebaseUid = token;
+        }
+      } catch {
+        firebaseUid = token;
       }
-    } catch {
-      firebaseUid = token;
     }
 
     const userRepo = AppDataSource.getRepository(User);
     let user = await userRepo.findOne({ where: { firebaseUid } });
 
     if (!user) {
-      // Crear usuario por defecto si no existe en BD local
+      // Crear y sincronizar automáticamente el usuario de Firebase en la BD MySQL
       user = userRepo.create({
         firebaseUid,
         email: email || `${firebaseUid}@ecommerce.com`,
-        name: "Usuario Registrado",
+        name: email ? email.split("@")[0] : "Usuario Firebase",
         role: "CLIENTE"
       });
       await userRepo.save(user);

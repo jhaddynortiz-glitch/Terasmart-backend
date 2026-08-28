@@ -6,7 +6,7 @@ const options: swaggerJSDoc.Options = {
     info: {
       title: "E-Commerce Multivendedor REST API (Enterprise Edition)",
       version: "2.0.0",
-      description: "Documentación interactiva Swagger completa con 16+ endpoints organizados para Autenticación, Categorías, Marcas, Productos, Variantes, Inventarios, Transferencias y Checkout."
+      description: "Documentación interactiva Swagger completa con esquemas de RequestBody e interactividad para creación de Categorías, Marcas, Productos, Variantes, Inventario y Checkout."
     },
     servers: [
       {
@@ -20,26 +20,81 @@ const options: swaggerJSDoc.Options = {
           type: "http",
           scheme: "bearer",
           bearerFormat: "JWT",
-          description: "Ingrese Token JWT de prueba (superadmin-uid-100, vendor1-uid-200 o client1-uid-400)."
+          description: "Ingrese el Token JWT de prueba obtenido desde POST /auth/dev-token (ej: superadmin-uid-100, vendor1-uid-200)."
         }
       },
       schemas: {
+        CategoryInput: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", example: "Deportes & Fitness" },
+            description: { type: "string", example: "Equipos de entrenamiento, pesas y accesorios deportivos." },
+            imageUrl: { type: "string", example: "https://images.unsplash.com/photo-1517838277536-f5f99be501cd" }
+          }
+        },
+        BrandInput: {
+          type: "object",
+          required: ["name"],
+          properties: {
+            name: { type: "string", example: "Adidas" },
+            logoUrl: { type: "string", example: "https://logo.clearbit.com/adidas.com" }
+          }
+        },
+        ProductInput: {
+          type: "object",
+          required: ["name", "sku", "categoryId", "basePrice"],
+          properties: {
+            categoryId: { type: "string", example: "ID-DE-CATEGORIA-EXISTENTE" },
+            brandId: { type: "string", example: "ID-DE-MARCA-EXISTENTE" },
+            name: { type: "string", example: "Teclado Mecánico RGB Corsair K95" },
+            sku: { type: "string", example: "KEYB-CORSAIR-K95" },
+            barcode: { type: "string", example: "0843591032125" },
+            description: { type: "string", example: "Teclado mecánico para gaming con switches Cherry MX Speed." },
+            basePrice: { type: "number", example: 199.99 },
+            weightKg: { type: "number", example: 1.30 },
+            mainImageUrl: { type: "string", example: "https://images.unsplash.com/photo-1587829741301-dc798b83add3" }
+          }
+        },
+        VariantInput: {
+          type: "object",
+          required: ["sku", "variantName", "price"],
+          properties: {
+            sku: { type: "string", example: "KEYB-CORSAIR-K95-BLK" },
+            barcode: { type: "string", example: "0843591032126" },
+            variantName: { type: "string", example: "Negro Gunmetal / Switches MX Speed" },
+            color: { type: "string", example: "Negro Gunmetal" },
+            size: { type: "string", example: "Full Size 100%" },
+            attributesJson: { type: "object", example: { switches: "Cherry MX Speed", rgb: true } },
+            price: { type: "number", example: 199.99 },
+            imageUrl: { type: "string", example: "https://images.unsplash.com/photo-1587829741301-dc798b83add3" }
+          }
+        },
+        StockUpdateInput: {
+          type: "object",
+          required: ["warehouseId", "variantId", "stock"],
+          properties: {
+            warehouseId: { type: "string", example: "ID-DE-ALMACEN-EXISTENTE" },
+            variantId: { type: "string", example: "ID-DE-VARIANTE-EXISTENTE" },
+            stock: { type: "integer", example: 50 }
+          }
+        },
         ReviewInput: {
           type: "object",
           required: ["rating", "comment"],
           properties: {
             rating: { type: "integer", minimum: 1, maximum: 5, example: 5 },
-            comment: { type: "string", example: "Excelente calidad de producto" }
+            comment: { type: "string", example: "Excelente calidad de producto, envío muy rápido." }
           }
         },
         TransferInput: {
           type: "object",
           required: ["originWarehouseId", "destWarehouseId", "variantId", "quantity"],
           properties: {
-            originWarehouseId: { type: "string", example: "uuid-almacen-origen" },
-            destWarehouseId: { type: "string", example: "uuid-almacen-destino" },
-            variantId: { type: "string", example: "uuid-variante" },
-            quantity: { type: "integer", example: 5 }
+            originWarehouseId: { type: "string", example: "ID-ALMACEN-ORIGEN" },
+            destWarehouseId: { type: "string", example: "ID-ALMACEN-DESTINO" },
+            variantId: { type: "string", example: "ID-VARIANTE-A-TRANSFERIR" },
+            quantity: { type: "integer", example: 3 }
           }
         },
         CheckoutInput: {
@@ -52,8 +107,8 @@ const options: swaggerJSDoc.Options = {
               items: {
                 type: "object",
                 properties: {
-                  variantId: { type: "string", example: "uuid-variante" },
-                  warehouseId: { type: "string", example: "uuid-almacen" },
+                  variantId: { type: "string", example: "ID-DE-VARIANTE" },
+                  warehouseId: { type: "string", example: "ID-DE-ALMACEN" },
                   quantity: { type: "integer", example: 2 },
                   unitPrice: { type: "number", example: 1450.00 }
                 }
@@ -66,7 +121,7 @@ const options: swaggerJSDoc.Options = {
     paths: {
       "/auth/dev-token": {
         post: {
-          summary: "Generar Token JWT de desarrollo firmado a solicitud (Para Pruebas)",
+          summary: "Generar Token JWT de desarrollo firmado (Para Pruebas)",
           tags: ["Autenticación & Perfil"],
           requestBody: {
             required: false,
@@ -85,7 +140,53 @@ const options: swaggerJSDoc.Options = {
           responses: { 200: { description: "Token JWT generado con éxito" } }
         }
       },
-            "/auth/refresh": {
+      "/auth/login": {
+        post: {
+          summary: "Iniciar sesión de usuario con Email y obtener Tokens (AccessToken + RefreshToken)",
+          tags: ["Autenticación & Perfil"],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["email"],
+                  properties: {
+                    email: { type: "string", example: "admin@ecommerce.com" },
+                    password: { type: "string", example: "Password123!" }
+                  }
+                }
+              }
+            }
+          },
+          responses: { 200: { description: "Inicio de sesión exitoso" } }
+        }
+      },
+      "/auth/register": {
+        post: {
+          summary: "Registrar un nuevo usuario simultáneamente en Firebase Auth y MySQL",
+          tags: ["Autenticación & Perfil"],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["email", "password"],
+                  properties: {
+                    name: { type: "string", example: "Nuevo Usuario" },
+                    email: { type: "string", example: "nuevo.usuario@gmail.com" },
+                    password: { type: "string", example: "Password123!" },
+                    role: { type: "string", enum: ["CLIENTE", "VENDEDOR", "SUPERADMIN"], example: "CLIENTE" }
+                  }
+                }
+              }
+            }
+          },
+          responses: { 201: { description: "Usuario registrado en Firebase Auth y MySQL" } }
+        }
+      },
+      "/auth/refresh": {
         post: {
           summary: "Renovar el AccessToken usando un RefreshToken válido sin pedir relogueo",
           tags: ["Autenticación & Perfil"],
@@ -96,31 +197,12 @@ const options: swaggerJSDoc.Options = {
                 schema: {
                   type: "object",
                   required: ["refreshToken"],
-                  properties: { refreshToken: { type: "string", example: "eyJhbGciOiJIUzI1Ni..." } }
+                  properties: { refreshToken: { type: "string", example: "eyJhbGci..." } }
                 }
               }
             }
           },
-          responses: { 200: { description: "Nuevo AccessToken emitido con éxito" }, 403: { description: "RefreshToken expirado o revocado" } }
-        }
-      },
-      "/auth/revoke": {
-        post: {
-          summary: "Revocar un RefreshToken al cerrar sesión (Logout)",
-          tags: ["Autenticación & Perfil"],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["refreshToken"],
-                  properties: { refreshToken: { type: "string", example: "eyJhbGciOiJIUzI1Ni..." } }
-                }
-              }
-            }
-          },
-          responses: { 200: { description: "RefreshToken revocado exitosamente" } }
+          responses: { 200: { description: "Nuevo AccessToken emitido" } }
         }
       },
       "/auth/sync": {
@@ -128,6 +210,20 @@ const options: swaggerJSDoc.Options = {
           summary: "Sincronizar usuario de Firebase Auth con MySQL",
           tags: ["Autenticación & Perfil"],
           security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: false,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    name: { type: "string", example: "María Vargas" },
+                    role: { type: "string", enum: ["CLIENTE", "VENDEDOR", "SUPERADMIN"], example: "CLIENTE" }
+                  }
+                }
+              }
+            }
+          },
           responses: { 200: { description: "Usuario sincronizado" } }
         }
       },
@@ -149,6 +245,14 @@ const options: swaggerJSDoc.Options = {
           summary: "Crear nueva categoría (SuperAdmin)",
           tags: ["Categorías"],
           security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CategoryInput" }
+              }
+            }
+          },
           responses: { 201: { description: "Categoría creada" } }
         }
       },
@@ -162,6 +266,14 @@ const options: swaggerJSDoc.Options = {
           summary: "Crear nueva marca (SuperAdmin)",
           tags: ["Marcas"],
           security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/BrandInput" }
+              }
+            }
+          },
           responses: { 201: { description: "Marca creada" } }
         }
       },
@@ -181,6 +293,14 @@ const options: swaggerJSDoc.Options = {
           summary: "Crear un nuevo producto con SKU y Marca (Vendedor / SuperAdmin)",
           tags: ["Productos & Variantes"],
           security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ProductInput" }
+              }
+            }
+          },
           responses: { 201: { description: "Producto creado" } }
         }
       },
@@ -198,6 +318,14 @@ const options: swaggerJSDoc.Options = {
           tags: ["Productos & Variantes"],
           security: [{ bearerAuth: [] }],
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/VariantInput" }
+              }
+            }
+          },
           responses: { 201: { description: "Variante agregada" } }
         }
       },
@@ -231,6 +359,14 @@ const options: swaggerJSDoc.Options = {
           summary: "Actualizar directamente el stock de una variante en un almacén",
           tags: ["Inventario & Almacenes"],
           security: [{ bearerAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/StockUpdateInput" }
+              }
+            }
+          },
           responses: { 200: { description: "Stock actualizado" } }
         }
       },
