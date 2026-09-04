@@ -1,14 +1,14 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import swaggerUi from "swagger-ui-express";
 import { swaggerSpec } from "./config/swagger";
 import "reflect-metadata";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import mysql from "mysql2/promise";
 import { AppDataSource } from "./config/data-source";
 import apiRoutes from "./routes";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -21,13 +21,14 @@ app.use("/api", apiRoutes);
 // Documentación Interactiva Swagger UI
 app.use("/docs", swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-
 app.get("/", (req, res) => {
   res.json({ message: "Servidor Backend E-Commerce TypeORM + JWT Activo" });
 });
 
-// Función para asegurar que la base de datos exista antes de conectar TypeORM
+// Función para asegurar que la base de datos MySQL exista localmente si no hay Neon DB
 async function ensureDatabaseExists() {
+  if (process.env.DATABASE_URL) return;
+
   const host = process.env.DB_HOST || "127.0.0.1";
   const port = parseInt(process.env.DB_PORT || "3306");
   const user = process.env.DB_USER || "root";
@@ -39,18 +40,20 @@ async function ensureDatabaseExists() {
   await connection.end();
 }
 
-// Inicializar Base de Datos MySQL y Servidor Express
+// Inicializar Base de Datos y Servidor Express
 async function bootstrap() {
   try {
     await ensureDatabaseExists();
     await AppDataSource.initialize();
-    console.log("Conexión exitosa a la Base de Datos MySQL (ecommerce_db) con TypeORM.");
+    
+    const dbType = process.env.DATABASE_URL ? "Neon PostgreSQL (Cloud)" : "MySQL (Local)";
+    console.log(`¡Conexión exitosa a la Base de Datos ${dbType} con TypeORM!`);
     
     app.listen(PORT, () => {
       console.log(`Servidor REST API ejecutándose en http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error("Error al conectar la Base de Datos MySQL:", error);
+    console.error("Error al conectar la Base de Datos:", error);
   }
 }
 
