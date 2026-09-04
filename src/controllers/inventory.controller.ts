@@ -82,4 +82,26 @@ export class InventoryController {
       return res.status(400).json({ error: e.message });
     }
   }
+
+  public static async createWarehouse(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { name, address, city, vendorId } = req.body;
+      const repo = AppDataSource.getRepository(Warehouse);
+      const newWh = repo.create({ name, address, city, vendorId });
+      await repo.save(newWh);
+      return res.status(201).json(newWh);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async getTransfers(req: AuthenticatedRequest, res: Response) {
+    try {
+      const repo = AppDataSource.getRepository(InventoryTransfer);
+      const transfers = await repo.find({ order: { createdAt: "DESC" } });
+      return res.json(transfers);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 }

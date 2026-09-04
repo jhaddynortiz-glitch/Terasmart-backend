@@ -287,4 +287,30 @@ export class AuthController {
       return res.status(500).json({ error: e.message });
     }
   }
+
+  public static async getUsers(req: Request, res: Response) {
+    try {
+      const repo = AppDataSource.getRepository(User);
+      const users = await repo.find({ order: { createdAt: "DESC" } });
+      return res.json(users);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async updateUserRole(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const { role } = req.body;
+      const repo = AppDataSource.getRepository(User);
+      const user = await repo.findOne({ where: { id } });
+      if (!user) return res.status(404).json({ message: "Usuario no encontrado." });
+
+      user.role = role;
+      await repo.save(user);
+      return res.json({ message: "Rol de usuario actualizado con éxito.", user });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 }
