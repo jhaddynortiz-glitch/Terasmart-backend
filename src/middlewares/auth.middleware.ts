@@ -24,13 +24,12 @@ export const authenticateJwt = async (req: AuthenticatedRequest, res: Response, 
     let firebaseUid = "";
     let email = "";
 
-    // 1. Intentar verificación oficial en vivo con Firebase Admin SDK
     try {
       const decodedFirebase = await firebaseAdmin.auth().verifyIdToken(token);
       firebaseUid = decodedFirebase.uid;
       email = decodedFirebase.email || `${firebaseUid}@firebase.com`;
     } catch (firebaseErr) {
-      // 2. Fallback de desarrollo para Tokens firmados localmente (dev-token o mock IDs)
+      // 2. Fallback de desarrollo para Tokens firmados localmente
       try {
         const decodedLocal = jwt.decode(token) as any;
         if (decodedLocal && (decodedLocal.uid || decodedLocal.user_id || decodedLocal.sub || decodedLocal.id)) {
@@ -48,7 +47,7 @@ export const authenticateJwt = async (req: AuthenticatedRequest, res: Response, 
     let user = await userRepo.findOne({ where: { firebaseUid } });
 
     if (!user) {
-      // Crear y sincronizar automáticamente el usuario de Firebase en la BD MySQL
+   
       user = userRepo.create({
         firebaseUid,
         email: email || `${firebaseUid}@ecommerce.com`,

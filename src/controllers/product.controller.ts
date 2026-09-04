@@ -52,7 +52,6 @@ export class ProductController {
       const variants = await variantRepo.find({ where: { productId: id } });
       const reviews = await reviewRepo.find({ where: { productId: id } });
 
-      // Calcular inventario por variante
       const variantsWithStock = await Promise.all(
         variants.map(async (v) => {
           const invList = await inventoryRepo.find({ where: { variantId: v.id } });
@@ -139,6 +138,50 @@ export class ProductController {
 
       await reviewRepo.save(newReview);
       return res.status(201).json({ message: "Reseña registrada con éxito.", review: newReview });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async updateProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, weightKg, mainImageUrl, status } = req.body;
+      const repo = AppDataSource.getRepository(Product);
+      
+      const product = await repo.findOne({ where: { id } });
+      if (!product) return res.status(404).json({ message: "Producto no encontrado." });
+
+      if (categoryId !== undefined) product.categoryId = categoryId;
+      if (brandId !== undefined) product.brandId = brandId;
+      if (name !== undefined) {
+        product.name = name;
+        product.slug = slug || name.toLowerCase().replace(/\s+/g, '-');
+      }
+      if (sku !== undefined) product.sku = sku;
+      if (barcode !== undefined) product.barcode = barcode;
+      if (description !== undefined) product.description = description;
+      if (basePrice !== undefined) product.basePrice = basePrice;
+      if (weightKg !== undefined) product.weightKg = weightKg;
+      if (mainImageUrl !== undefined) product.mainImageUrl = mainImageUrl;
+      if (status !== undefined) product.status = status;
+
+      await repo.save(product);
+      return res.json({ message: "Producto actualizado con éxito.", product });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async deleteProduct(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const repo = AppDataSource.getRepository(Product);
+      const product = await repo.findOne({ where: { id } });
+      if (!product) return res.status(404).json({ message: "Producto no encontrado." });
+
+      await repo.remove(product);
+      return res.json({ message: "Producto eliminado exitosamente." });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }

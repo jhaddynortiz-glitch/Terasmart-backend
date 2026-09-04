@@ -15,7 +15,7 @@ export class ProductVariant {
   barcode: string;
 
   @Column()
-  variantName: string; // Ej: "Negro / 32GB RAM"
+  variantName: string;
 
   @Column({ nullable: true })
   color: string;
@@ -24,7 +24,7 @@ export class ProductVariant {
   size: string;
 
   @Column("json", { nullable: true })
-  attributesJson: any; // Ej: { "ram": "32GB", "almacenamiento": "1TB" }
+  attributesJson: any; 
 
   @Column("decimal", { precision: 10, scale: 2 })
   price: number;
