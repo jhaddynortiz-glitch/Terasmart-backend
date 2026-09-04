@@ -31,6 +31,9 @@ export class Product {
   @Column("decimal", { precision: 10, scale: 2 })
   basePrice: number;
 
+  @Column("int", { default: 10 })
+  stock: number;
+
   @Column("decimal", { precision: 6, scale: 2, default: 0.00 })
   weightKg: number;
 
