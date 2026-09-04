@@ -77,8 +77,12 @@ export class ProductController {
 
   public static async createProduct(req: AuthenticatedRequest, res: Response) {
     try {
-      const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, weightKg, mainImageUrl } = req.body;
+      const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, weightKg, mainImageUrl, warehouseId, initialStock } = req.body;
       const repo = AppDataSource.getRepository(Product);
+      const variantRepo = AppDataSource.getRepository(ProductVariant);
+      const inventoryRepo = AppDataSource.getRepository(Inventory);
+      const warehouseRepo = AppDataSource.getRepository(Warehouse);
+
       const newProd = repo.create({
         categoryId,
         brandId,
@@ -93,6 +97,35 @@ export class ProductController {
         status: "ACTIVE"
       });
       await repo.save(newProd);
+
+      // Crear variante por defecto
+      const defaultVariant = variantRepo.create({
+        productId: newProd.id,
+        sku: `${sku}-STD`,
+        barcode: barcode || undefined,
+        variantName: "Estándar / Variante Base",
+        price: basePrice,
+        imageUrl: mainImageUrl
+      });
+      await variantRepo.save(defaultVariant);
+
+      // Determinar almacén y asignar stock inicial
+      let targetWarehouseId = warehouseId;
+      if (!targetWarehouseId) {
+        const firstWh = await warehouseRepo.findOne({ where: {} });
+        if (firstWh) targetWarehouseId = firstWh.id;
+      }
+
+      if (targetWarehouseId) {
+        const stockQty = initialStock !== undefined ? parseInt(initialStock) : 10;
+        const inv = inventoryRepo.create({
+          warehouseId: targetWarehouseId,
+          variantId: defaultVariant.id,
+          stock: stockQty
+        });
+        await inventoryRepo.save(inv);
+      }
+
       return res.status(201).json(newProd);
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
