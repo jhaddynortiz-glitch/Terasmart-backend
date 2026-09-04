@@ -37,8 +37,20 @@ export class InventoryController {
     public static async getWarehouses(req: Request, res: Response) {
     try {
       const warehouseRepo = AppDataSource.getRepository(Warehouse);
+      const userRepo = AppDataSource.getRepository(User);
       const warehouses = await warehouseRepo.find();
-      return res.json(warehouses);
+
+      const warehousesWithVendor = await Promise.all(
+        warehouses.map(async (wh) => {
+          const vendor = wh.vendorId ? await userRepo.findOne({ where: { id: wh.vendorId } }) : null;
+          return {
+            ...wh,
+            vendor: vendor ? { id: vendor.id, name: vendor.name, email: vendor.email, role: vendor.role } : null
+          };
+        })
+      );
+
+      return res.json(warehousesWithVendor);
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }
