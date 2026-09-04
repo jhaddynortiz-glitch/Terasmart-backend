@@ -116,4 +116,45 @@ export class InventoryController {
       return res.status(500).json({ error: e.message });
     }
   }
+
+  public static async saveStockDistribution(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { productId, allocations } = req.body; // allocations: [{ warehouseId: string, stock: number }]
+      const variantRepo = AppDataSource.getRepository(ProductVariant);
+      const inventoryRepo = AppDataSource.getRepository(Inventory);
+
+      let variant = await variantRepo.findOne({ where: { productId } });
+      if (!variant) {
+        // Fallback: si no existe variante, la crea automáticamente
+        variant = variantRepo.create({
+          productId,
+          sku: `VAR-${productId.substring(0, 8)}`,
+          variantName: "Estándar / Base",
+          price: 0
+        });
+        await variantRepo.save(variant);
+      }
+
+      if (allocations && Array.isArray(allocations)) {
+        for (const item of allocations) {
+          const { warehouseId, stock } = item;
+          let inv = await inventoryRepo.findOne({ where: { warehouseId, variantId: variant.id } });
+          if (!inv) {
+            inv = inventoryRepo.create({
+              warehouseId,
+              variantId: variant.id,
+              stock: parseInt(stock) || 0
+            });
+          } else {
+            inv.stock = parseInt(stock) || 0;
+          }
+          await inventoryRepo.save(inv);
+        }
+      }
+
+      return res.json({ message: "Distribución de stock guardada con éxito en las sucursales." });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
 }
