@@ -1,7 +1,10 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { AppDataSource } from "../config/data-source";
 import { Inventory } from "../entities/Inventory";
 import { Warehouse } from "../entities/Warehouse";
+import { User } from "../entities/User";
+import { InventoryTransfer } from "../entities/InventoryTransfer";
+import { ProductVariant } from "../entities/ProductVariant";
 import { InventoryTransferService } from "../services/inventory-transfer.service";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 
@@ -153,6 +156,29 @@ export class InventoryController {
       }
 
       return res.json({ message: "Distribución de stock guardada con éxito en las sucursales." });
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async getProductDistribution(req: Request, res: Response) {
+    try {
+      const { productId } = req.params;
+      const variantRepo = AppDataSource.getRepository(ProductVariant);
+      const inventoryRepo = AppDataSource.getRepository(Inventory);
+
+      const variant = await variantRepo.findOne({ where: { productId } });
+      if (!variant) {
+        return res.json({ allocations: {} });
+      }
+
+      const invList = await inventoryRepo.find({ where: { variantId: variant.id } });
+      const allocations: Record<string, number> = {};
+      invList.forEach((item) => {
+        allocations[item.warehouseId] = item.stock;
+      });
+
+      return res.json({ allocations });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }

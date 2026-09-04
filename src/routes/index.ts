@@ -47,6 +47,7 @@ router.put("/inventory/stock", authenticateJwt, authorizeRoles("VENDEDOR", "SUPE
 router.get("/inventory/transfers", authenticateJwt, authorizeRoles("SUPERADMIN"), InventoryController.getTransfers as any);
 router.post("/inventory/transfers", authenticateJwt, authorizeRoles("VENDEDOR", "SUPERADMIN"), InventoryController.transferStock as any);
 router.put("/inventory/stock-distribution", authenticateJwt, authorizeRoles("SUPERADMIN"), InventoryController.saveStockDistribution as any);
+router.get("/inventory/product-distribution/:productId", authenticateJwt, InventoryController.getProductDistribution as any);
 
 // Ordenes
 router.post("/orders/checkout", authenticateJwt, authorizeRoles("CLIENTE", "SUPERADMIN"), OrderController.checkout as any);
