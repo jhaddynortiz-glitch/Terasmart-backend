@@ -1,8 +1,9 @@
-import { Response } from "express";
+import { Request, Response } from "express";
 import { AppDataSource } from "../config/data-source";
 import { Order } from "../entities/Order";
 import { OrderItem } from "../entities/OrderItem";
 import { Inventory } from "../entities/Inventory";
+import { User } from "../entities/User";
 import { AuthenticatedRequest } from "../middlewares/auth.middleware";
 
 export class OrderController {
@@ -63,10 +64,88 @@ export class OrderController {
 
   public static async getMyOrders(req: AuthenticatedRequest, res: Response) {
     try {
-      const clientId = req.user!.id;
+      const userId = req.user!.id;
+      const userRole = req.user!.role;
       const orderRepo = AppDataSource.getRepository(Order);
-      const orders = await orderRepo.find({ where: { clientId }, order: { createdAt: "DESC" } });
-      return res.json(orders);
+      const userRepo = AppDataSource.getRepository(User);
+
+      let orders: Order[] = [];
+      if (userRole === "CLIENTE") {
+        orders = await orderRepo.find({ where: { clientId: userId }, order: { createdAt: "DESC" } });
+      } else {
+        // VENDEDOR o SUPERADMIN
+        orders = await orderRepo.find({ order: { createdAt: "DESC" } });
+      }
+
+      const ordersWithDetails = await Promise.all(
+        orders.map(async (ord) => {
+          const client = await userRepo.findOne({ where: { id: ord.clientId } });
+          return {
+            ...ord,
+            clientName: client ? client.name : "Cliente Registrado",
+            clientEmail: client ? client.email : "cliente@terasmart.com",
+            address: "Dirección Registrada",
+            city: "Cochabamba",
+            status: ord.shippingStatus === "PROCESSING" ? "PENDIENTE" : ord.shippingStatus === "SHIPPED" ? "ENVIADO" : "ENTREGADO"
+          };
+        })
+      );
+
+      return res.json(ordersWithDetails);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async getAllOrders(req: AuthenticatedRequest, res: Response) {
+    try {
+      const orderRepo = AppDataSource.getRepository(Order);
+      const userRepo = AppDataSource.getRepository(User);
+      const orders = await orderRepo.find({ order: { createdAt: "DESC" } });
+
+      const ordersWithDetails = await Promise.all(
+        orders.map(async (ord) => {
+          const client = await userRepo.findOne({ where: { id: ord.clientId } });
+          return {
+            ...ord,
+            clientName: client ? client.name : "Cliente Registrado",
+            clientEmail: client ? client.email : "cliente@terasmart.com",
+            address: "Dirección Registrada",
+            city: "Cochabamba",
+            status: ord.shippingStatus === "PROCESSING" ? "PENDIENTE" : ord.shippingStatus === "SHIPPED" ? "ENVIADO" : "ENTREGADO"
+          };
+        })
+      );
+
+      return res.json(ordersWithDetails);
+    } catch (e: any) {
+      return res.status(500).json({ error: e.message });
+    }
+  }
+
+  public static async updateOrderStatus(req: AuthenticatedRequest, res: Response) {
+    try {
+      const { id } = req.params;
+      const { status, shippingStatus, paymentStatus } = req.body;
+      const orderRepo = AppDataSource.getRepository(Order);
+
+      const order = await orderRepo.findOne({ where: { id } });
+      if (!order) return res.status(404).json({ message: "Orden no encontrada." });
+
+      if (shippingStatus) {
+        order.shippingStatus = shippingStatus;
+      } else if (status) {
+        if (status === "PENDIENTE" || status === "EN PREPARACIÓN") order.shippingStatus = "PROCESSING";
+        else if (status === "ENVIADO") order.shippingStatus = "SHIPPED";
+        else if (status === "ENTREGADO") order.shippingStatus = "DELIVERED";
+      }
+
+      if (paymentStatus) {
+        order.paymentStatus = paymentStatus;
+      }
+
+      await orderRepo.save(order);
+      return res.json({ message: "Estado de orden actualizado con éxito.", order });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }
@@ -77,12 +156,22 @@ export class OrderController {
       const { id } = req.params;
       const orderRepo = AppDataSource.getRepository(Order);
       const itemRepo = AppDataSource.getRepository(OrderItem);
+      const userRepo = AppDataSource.getRepository(User);
 
       const order = await orderRepo.findOne({ where: { id } });
       if (!order) return res.status(404).json({ message: "Orden no encontrada." });
 
+      const client = await userRepo.findOne({ where: { id: order.clientId } });
       const items = await itemRepo.find({ where: { orderId: id } });
-      return res.json({ order, items });
+
+      return res.json({
+        order: {
+          ...order,
+          clientName: client ? client.name : "Cliente Registrado",
+          clientEmail: client ? client.email : "cliente@terasmart.com"
+        },
+        items
+      });
     } catch (e: any) {
       return res.status(500).json({ error: e.message });
     }

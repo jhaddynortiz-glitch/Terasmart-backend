@@ -51,7 +51,9 @@ router.get("/inventory/product-distribution/:productId", authenticateJwt, Invent
 
 // Ordenes
 router.post("/orders/checkout", authenticateJwt, authorizeRoles("CLIENTE", "SUPERADMIN"), OrderController.checkout as any);
-router.get("/orders/my-orders", authenticateJwt, authorizeRoles("CLIENTE", "SUPERADMIN"), OrderController.getMyOrders as any);
+router.get("/orders/my-orders", authenticateJwt, authorizeRoles("CLIENTE", "VENDEDOR", "SUPERADMIN"), OrderController.getMyOrders as any);
+router.get("/admin/orders", authenticateJwt, authorizeRoles("SUPERADMIN"), OrderController.getAllOrders as any);
+router.put("/orders/:id/status", authenticateJwt, authorizeRoles("VENDEDOR", "SUPERADMIN"), OrderController.updateOrderStatus as any);
 router.get("/orders/:id", authenticateJwt, OrderController.getOrderDetail as any);
 
 export default router;
