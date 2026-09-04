@@ -149,7 +149,7 @@ export class ProductController {
   public static async updateProduct(req: AuthenticatedRequest, res: Response) {
     try {
       const { id } = req.params;
-      const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, weightKg, mainImageUrl, status } = req.body;
+      const { categoryId, brandId, name, slug, sku, barcode, description, basePrice, stock, weightKg, mainImageUrl, status } = req.body;
       const repo = AppDataSource.getRepository(Product);
       
       const product = await repo.findOne({ where: { id } });
